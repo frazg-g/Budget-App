@@ -11,8 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&family=Plus+Jakarta+Sans:wght@300;400;500;600&family=DM+Mono:wght@300;400;500&display=swap"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js">render();
-</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#f5efe2;--surface:#fdf9ef;--surface2:#efe6cf;--border:#ddd1b3;--border2:#c3b690;--ink:#25302a;--ink-soft:#4a5247;--muted:#8a8270;--forest:#2f6047;--forest-bright:#4a7d62;--forest-deep:#1f4030;--forest-soft:#c8d8cc;--sage:#7e9b80;--moss:#a89752;--clay:#c08766;--rust:#aa6b4d;--steel:#6c89a3}
@@ -185,7 +184,7 @@ const INV_COLORS={lisa:'var(--forest)',isa:'var(--sage)',t212:'var(--moss)',cash
 const INV_HEX={lisa:'#2f6047',isa:'#7e9b80',t212:'#a89752',cash:'#6c89a3',holiday:'#c08766',crypto:'#aa6b4d'};
 const INV_RGBA={lisa:'rgba(47,96,71,0.55)',isa:'rgba(126,155,128,0.42)',t212:'rgba(168,151,82,0.38)',cash:'rgba(108,137,163,0.32)',holiday:'rgba(192,135,102,0.30)',crypto:'rgba(170,107,77,0.30)'};
 const INV_NAMES={lisa:'LISA',isa:'S&S ISA',t212:'High-risk',cash:'Cash',holiday:'Holiday',crypto:'Crypto'};
-const LOAN_PLANS=[{v:'plan1',l:'Plan 1 — England/Wales (pre-2012)',threshold:26900,rate:.09},{v:'plan2',l:'Plan 2 — England/Wales (2012–2023)',threshold:29385,rate:.09},{v:'plan4',l:'Plan 4 — Scotland',threshold:32745,rate:.09},{v:'plan5',l:'Plan 5 — England (post Aug 2023)',threshold:28470,rate:.09},{v:'postgrad',l:'Postgraduate loan',threshold:21000,rate:.06},{v:'manual',l:'I\'ll enter my monthly amount',threshold:0,rate:0}];
+const LOAN_PLANS=[{v:'plan1',l:'Plan 1 — England/Wales (pre-2012)',threshold:26900,rate:.09},{v:'plan2',l:'Plan 2 — England/Wales (2012–2023)',threshold:29385,rate:.09},{v:'plan4',l:'Plan 4 — Scotland',threshold:32745,rate:.09},{v:'plan5',l:'Plan 5 — England (post Aug 2023)',threshold:28470,rate:.09},{v:'postgrad',l:'Postgraduate loan',threshold:21000,rate:.06},{v:'manual',l:'Enter my own monthly amount',threshold:0,rate:0}];
 function calcLoanMonthly(salary,plan,manualAmt){if(plan==='manual')return manualAmt||0;var lp=LOAN_PLANS.find(function(p){return p.v===plan});if(!lp||!lp.threshold||salary<=lp.threshold)return 0;return Math.round((salary-lp.threshold)*lp.rate/12)}
 const STEPS=['name','income','essentials','investments','lifestyle','balances','goals'];
 const SK='wealth_plan_v2';
@@ -253,7 +252,7 @@ var savPct=th>0?Math.round(savingTotal/th*100):0;
 document.getElementById('d-subMonthly').innerHTML='<strong>'+savPct+'%</strong> saved & invested each month, '+p.name+'.';
 if(budgetChart)budgetChart.destroy();
 var ctx=document.getElementById('budgetDonut').getContext('2d');
-budgetChart=new Chart(ctx,{type:'doughnut',data:{labels:segments.map(function(s){return s.label}),datasets:[{data:segments.map(function(s){return s.amount}),backgroundColor:segments.map(function(s){return s.color}),borderColor:'#fdf9ef',borderWidth:2.5,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:'70%',plugins:{legend:{display:false},tooltip:{backgroundColor:'#fdf9ef',borderColor:'#c3b690',borderWidth:1,titleFont:{family:'DM Mono',size:11},bodyFont:{family:'DM Mono',size:11},titleColor:'#2f6047',bodyColor:'#25302a',padding:12,cornerRadius:8,callbacks:{label:function(c){return' '+c.label+': '+fmt(c.raw)+' ('+Math.round(c.raw/th*100)+'%)'}}}}}}});
+budgetChart=new Chart(ctx,{type:'doughnut',data:{labels:segments.map(function(s){return s.label}),datasets:[{data:segments.map(function(s){return s.amount}),backgroundColor:segments.map(function(s){return s.color}),borderColor:'#fdf9ef',borderWidth:2.5,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:true,cutout:'70%',plugins:{legend:{display:false},tooltip:{backgroundColor:'#fdf9ef',borderColor:'#c3b690',borderWidth:1,titleFont:{family:'DM Mono',size:11},bodyFont:{family:'DM Mono',size:11},titleColor:'#2f6047',bodyColor:'#25302a',padding:12,cornerRadius:8,callbacks:{label:function(c){return' '+c.label+': '+fmt(c.raw)+' ('+Math.round(c.raw/th*100)+'%)'}}}}}});
 var bd=document.getElementById('budgetBreakdown');bd.innerHTML='';
 segments.forEach(function(seg){var pct=th>0?Math.round(seg.amount/th*100):0;var row=document.createElement('div');row.className='budget-row';row.innerHTML='<div class="budget-dot" style="background:'+seg.color+'"></div><div class="budget-info"><div class="budget-cat">'+seg.label+'</div><div class="budget-pct">'+pct+'% of take-home</div></div><div class="budget-amt">'+fmt(seg.amount)+'</div>';bd.appendChild(row)})}
 render();
