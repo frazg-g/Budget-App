@@ -114,6 +114,34 @@ body {
 .progress-dot.active { background: var(--forest); width: 24px; border-radius: 4px; }
 .progress-dot.done { background: var(--sage); }
 
+/* Segmented control */
+.segmented {
+  display: flex;
+  background: var(--surface2);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 20px;
+}
+.segmented button {
+  flex: 1;
+  padding: 11px 12px;
+  border: none;
+  background: transparent;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all .2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.segmented button.active {
+  background: var(--surface);
+  color: var(--forest);
+  box-shadow: 0 1px 4px rgba(45,55,40,.08);
+}
+
 /* Toggle cards */
 .toggle-card {
   background: var(--surface); border: 1px solid var(--border);
@@ -403,6 +431,22 @@ function calcTakeHome(gross, pensionPct, bik, loanMo = 0) {
   return (taxable - tax - ni) / 12 - loanMo;
 }
 
+// Returns effective monthly take-home for a profile/draft regardless of input mode
+function effectiveTakehome(p) {
+  const mode = p.incomeMode || 'annual';
+  if (mode === 'monthly') {
+    // Direct monthly entry — student loan still deducted if user has one set
+    const loanMo = p.hasStudentLoan
+      ? calcLoanMonthly(p.annualForLoan || 0, p.loanPlan || 'plan2', p.loanManual || 0)
+      : 0;
+    return (p.monthlyTakehome || 0) - loanMo;
+  }
+  const loanMo = p.hasStudentLoan
+    ? calcLoanMonthly(p.salary || 0, p.loanPlan || 'plan2', p.loanManual || 0)
+    : 0;
+  return calcTakeHome(p.salary || 0, p.pension || 0, p.bik || 0, loanMo);
+}
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 function fmt(n) {
@@ -444,7 +488,10 @@ const STEPS = ['name', 'income', 'essentials', 'investments', 'lifestyle'];
 function startSetup() {
   editingProfileId = null;
   draft = {
-    name: '', salary: 30000, pension: 5, bik: 0,
+    name: '',
+    incomeMode: 'annual',
+    salary: 30000, pension: 5, bik: 0,
+    monthlyTakehome: 0, annualForLoan: 0,
     enabledEss: ['rent', 'bills', 'food'],
     enabledInv: ['isa', 'cash'],
     lifestyle: 0,
@@ -462,6 +509,7 @@ function editCurrentProfile() {
   if (!p) return;
   editingProfileId = p.id;
   draft = JSON.parse(JSON.stringify(p));
+  if (!draft.incomeMode) draft.incomeMode = 'annual';
   step = 0;
   showScreen('wizardScreen');
   renderStep();
@@ -524,16 +572,27 @@ function renderNameStep(c) {
   navBtns(c, false);
 }
 
-function getLoanMo() {
-  return draft.hasStudentLoan
-    ? calcLoanMonthly(draft.salary || 0, draft.loanPlan || 'plan2', draft.loanManual || 0)
-    : 0;
+function getDraftLoanMo() {
+  if (!draft.hasStudentLoan) return 0;
+  const baseSalary = draft.incomeMode === 'monthly'
+    ? (draft.annualForLoan || 0)
+    : (draft.salary || 0);
+  return calcLoanMonthly(baseSalary, draft.loanPlan || 'plan2', draft.loanManual || 0);
 }
 
 function renderIncomeStep(c) {
-  mk('div', 'step-header', '<h2>Your <em>income</em></h2><p>We\'ll work out your monthly take-home.</p>', c);
-  const sec = mk('div', 'form-section', '', c);
+  mk('div', 'step-header', '<h2>Your <em>income</em></h2><p>Annual salary for tax calculation, or enter your monthly take-home directly.</p>', c);
 
+  // Segmented control for income mode
+  const seg = mk('div', 'segmented', '', c);
+  const annualBtn = mk('button', '', 'Annual salary', seg);
+  const monthlyBtn = mk('button', '', 'Monthly take-home', seg);
+
+  const annualSection = mk('div', '', '', c);
+  const monthlySection = mk('div', '', '', c);
+
+  // ── Annual section ──
+  const sec = mk('div', 'form-section', '', annualSection);
   [
     { id: 'salary',  label: 'Annual gross salary',     pre: '£', ph: '50000' },
     { id: 'pension', label: 'Pension sacrifice',        suf: '%', ph: '5' },
@@ -552,7 +611,22 @@ function renderIncomeStep(c) {
     if (f.suf) mk('span', 'suffix', f.suf, w);
   });
 
-  // Student loan toggle
+  // ── Monthly section ──
+  const msec = mk('div', 'form-section', '', monthlySection);
+  const mrow = mk('div', 'form-row', '', msec);
+  mrow.style.borderBottom = 'none';
+  const mLbl = mk('label', '', 'Monthly take-home pay', mrow);
+  mk('span', 'hint', 'What lands in your account each month after tax', mLbl);
+  const mwrap = mk('div', 'input-wrap', '', mrow);
+  mk('span', 'prefix', '£', mwrap);
+  const minp = document.createElement('input');
+  minp.type = 'number'; minp.inputMode = 'decimal';
+  minp.placeholder = '3000';
+  minp.value = draft.monthlyTakehome || '';
+  minp.oninput = () => { draft.monthlyTakehome = parseFloat(minp.value) || 0; updTH(); };
+  mwrap.appendChild(minp);
+
+  // ── Student loan toggle (works in both modes) ──
   const loanCard = mk('div', 'toggle-card' + (draft.hasStudentLoan ? ' on' : ''), '', c);
   const loanTop  = mk('div', 'toggle-top', '', loanCard);
   mk('span', 'toggle-icon', '🎓', loanTop);
@@ -564,8 +638,19 @@ function renderIncomeStep(c) {
   const loanBody = mk('div', '', '', loanCard);
   loanBody.style.cssText = 'padding:0 16px 14px;display:' + (draft.hasStudentLoan ? 'block' : 'none');
 
+  // Annual salary input (only shown in monthly mode if loan plan needs it)
+  const annualLoanRow = mk('div', 'form-row', '', loanBody);
+  mk('label', '', 'Annual salary for loan calc', annualLoanRow);
+  const alw = mk('div', 'input-wrap', '', annualLoanRow);
+  mk('span', 'prefix', '£', alw);
+  const annualLoanInp = document.createElement('input');
+  annualLoanInp.type = 'number'; annualLoanInp.inputMode = 'decimal';
+  annualLoanInp.placeholder = '50000';
+  annualLoanInp.value = draft.annualForLoan || '';
+  annualLoanInp.oninput = () => { draft.annualForLoan = parseFloat(annualLoanInp.value) || 0; updTH(); };
+  alw.appendChild(annualLoanInp);
+
   const planRow = mk('div', 'form-row', '', loanBody);
-  planRow.style.borderBottom = 'none';
   mk('label', '', 'Repayment plan', planRow);
   const planSel = document.createElement('select');
   planSel.style.cssText = 'background:var(--bg);border:1px solid var(--border);color:var(--ink);padding:9px 10px;border-radius:8px;font-family:Plus Jakarta Sans,sans-serif;font-size:13.5px;max-width:200px;';
@@ -594,10 +679,15 @@ function renderIncomeStep(c) {
   mk('span', 'label-text', 'Monthly deduction', calcRow);
   mk('span', 'value', '—', calcRow);
 
+  function updateLoanRows() {
+    annualLoanRow.style.display = (draft.incomeMode === 'monthly' && draft.loanPlan !== 'manual') ? 'flex' : 'none';
+    manualRow.style.display = draft.loanPlan === 'manual' ? 'flex' : 'none';
+    calcRow.style.display   = draft.loanPlan === 'manual' ? 'none' : 'flex';
+  }
+
   planSel.onchange = () => {
     draft.loanPlan = planSel.value;
-    manualRow.style.display = planSel.value === 'manual' ? 'flex' : 'none';
-    calcRow.style.display   = planSel.value === 'manual' ? 'none' : 'flex';
+    updateLoanRows();
     updTH();
   };
 
@@ -608,21 +698,39 @@ function renderIncomeStep(c) {
     updTH();
   };
 
+  // ── Take-home display ──
   const cb = mk('div', 'computed-bar', '', c);
   cb.id = 'incomeTH';
   mk('span', 'label-text', 'Take-home / month', cb);
   mk('span', 'value', '—', cb);
-  updTH();
+
+  // ── Mode switching ──
+  function updateMode() {
+    const isAnnual = draft.incomeMode !== 'monthly';
+    annualBtn.classList.toggle('active', isAnnual);
+    monthlyBtn.classList.toggle('active', !isAnnual);
+    annualSection.style.display = isAnnual ? 'block' : 'none';
+    monthlySection.style.display = isAnnual ? 'none' : 'block';
+    updateLoanRows();
+    updTH();
+  }
+
+  annualBtn.onclick = () => { draft.incomeMode = 'annual'; updateMode(); };
+  monthlyBtn.onclick = () => { draft.incomeMode = 'monthly'; updateMode(); };
+
+  updateMode();
   navBtns(c);
 }
 
 function updTH() {
-  const th = calcTakeHome(draft.salary || 0, draft.pension || 0, draft.bik || 0, getLoanMo());
+  const th = effectiveTakehome(draft);
   const cb = document.getElementById('incomeTH');
   if (cb) cb.querySelector('.value').textContent = fmt(th);
+
   const lb = document.getElementById('loanCalcBar');
   if (lb) {
-    const auto = calcLoanMonthly(draft.salary || 0, draft.loanPlan || 'plan2', 0);
+    const baseSalary = draft.incomeMode === 'monthly' ? (draft.annualForLoan || 0) : (draft.salary || 0);
+    const auto = calcLoanMonthly(baseSalary, draft.loanPlan || 'plan2', 0);
     lb.querySelector('.value').textContent = fmt(auto);
     lb.querySelector('.label-text').textContent =
       auto > 0 ? 'Monthly deduction (est.)' : 'Below threshold — no deductions';
@@ -692,7 +800,7 @@ function renderLifestyleStep(c) {
 function updBuf() {
   const cb = document.getElementById('bufferBar');
   if (!cb) return;
-  const th  = calcTakeHome(draft.salary || 0, draft.pension || 0, draft.bik || 0, getLoanMo());
+  const th  = effectiveTakehome(draft);
   const ess = (draft.enabledEss || []).reduce((s, id) => s + (draft['e_' + id] || 0), 0);
   const inv = (draft.enabledInv || []).reduce((s, id) => s + (draft['m_' + id] || 0), 0);
   const buf = th - ess - inv - (draft.lifestyle || 0);
@@ -706,7 +814,17 @@ function updBuf() {
 
 function saveProfile() {
   draft.name = draft.name || 'Unnamed';
-  if (!draft.salary || draft.salary <= 0) { showToast('Please enter your salary'); return; }
+  if (draft.incomeMode === 'monthly') {
+    if (!draft.monthlyTakehome || draft.monthlyTakehome <= 0) {
+      showToast('Please enter your monthly take-home');
+      return;
+    }
+  } else {
+    if (!draft.salary || draft.salary <= 0) {
+      showToast('Please enter your salary');
+      return;
+    }
+  }
   if (editingProfileId) {
     const i = state.profiles.findIndex(p => p.id === editingProfileId);
     if (i >= 0) state.profiles[i] = { ...state.profiles[i], ...draft };
@@ -738,12 +856,19 @@ function renderMonthlyBudget() {
   const p = state.profiles.find(x => x.id === state.activeId);
   if (!p) return;
 
+  const mode = p.incomeMode || 'annual';
   const loanMo = p.hasStudentLoan
-    ? calcLoanMonthly(p.salary || 0, p.loanPlan || 'plan2', p.loanManual || 0)
+    ? calcLoanMonthly(
+        mode === 'monthly' ? (p.annualForLoan || 0) : (p.salary || 0),
+        p.loanPlan || 'plan2',
+        p.loanManual || 0
+      )
     : 0;
 
-  // Hero shows take-home before loan deduction; loan appears as its own donut segment
-  const thGross = calcTakeHome(p.salary || 0, p.pension || 0, p.bik || 0, 0);
+  // Hero shows take-home BEFORE loan deduction; loan appears as its own donut segment
+  const thGross = mode === 'monthly'
+    ? (p.monthlyTakehome || 0)
+    : calcTakeHome(p.salary || 0, p.pension || 0, p.bik || 0, 0);
   document.getElementById('heroMonthly').textContent = Math.round(thGross).toLocaleString('en-GB');
 
   // Build donut segments
